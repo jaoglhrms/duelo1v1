@@ -2,6 +2,7 @@ import os
 import asyncio
 import websockets
 import json
+import http
 
 # Banco de dados simplificado
 bd = {
@@ -85,12 +86,27 @@ async def gerenciar_batalha(websocket):
         print(f"[{id_jogador}] Saiu da arena.")
         del conexoes[websocket]
 
+async def processar_requisicao(connection, request):
+    # O handshake de um WebSocket sempre tem um cabeçalho "Upgrade"
+    # Se não tiver, é o bot do Render fazendo Health Check.
+    if "Upgrade" not in request.headers:
+        # Devolvemos um "OK" simples para o Render ficar feliz e não derrubar o servidor
+        return connection.respond(http.HTTPStatus.OK, "Servidor Vivo\n")
+    
+    # Retornar None faz com que o fluxo continue normalmente para a batalha
+    return None
+
 async def main():
     porta = int(os.environ.get("PORT", 8765))
     
-    # Inicia o servidor permitindo conexões externas na porta dada pelo Render
-    async with websockets.serve(gerenciar_batalha, "0.0.0.0", porta):
-        print(f"Servidor a correr na porta {porta}. A aguardar lutadores...")
+    # Adicionamos o parâmetro process_request aqui dentro do serve
+    async with websockets.serve(
+        gerenciar_batalha, 
+        "0.0.0.0", 
+        porta, 
+        process_request=processar_requisicao
+    ):
+        print(f"Servidor a correr na porta {porta}. À espera de lutadores...")
         await asyncio.Future()
 
 if __name__ == "__main__":
